@@ -14,7 +14,7 @@ using namespace std;
 //Some Hack Here...
 #define DROPRATE_UPDATE_PERIOD 40
 #define NN_UPDATE_PERIOD 100
-#define DROPRATE_BOUND 0.3
+#define DROPRATE_BOUND 0.1
 #define SWEEP_TIME 0
 #define PATH_TO_PYTHON_INTERFACE "/home/rl/Project/rl-qm/mahimahiInterface/"
 
@@ -65,6 +65,8 @@ pthread_mutex_t swap_lock;
 
 struct StateRing stateRing;
 struct State * state_cur = NULL;
+
+uint64_t update_interval = 0;
 
 
 float ring_avg(float* data, int start, int end)
@@ -140,7 +142,7 @@ void printStateRing()
 		
             fprintf(fp," %f",stateRing.ring[(stateRing.counter - STATE_RING_SIZE + 1+ i + 1)%STATE_RING_SIZE].s[22]);
             fprintf(fp," %f",stateRing.ring[(stateRing.counter - STATE_RING_SIZE + 1+ i + 1)%STATE_RING_SIZE].s[23]);
-
+	    fprintf(fp," %lu", update_interval);
             fprintf(fp,"\n");
         }         
 
@@ -363,6 +365,7 @@ void* UpdateDropRate_thread(void* context)
 	static int sweep = 1;
 	static int step = 0;
 	static float sweep_dp = 0.00001;
+	static int sweep_dir = 1; // 1 or -1
 	
 	while(true)
 	{
@@ -371,8 +374,7 @@ void* UpdateDropRate_thread(void* context)
 		//We give the control of this to python.
 
 
-		//uint64_t now = timestamp();
-		usleep(1000*DROPRATE_UPDATE_PERIOD);
+		uint64_t now = timestamp();
 	
 		UpdateState((float)(*_current_qdelay), action_old);
 	
@@ -409,24 +411,32 @@ void* UpdateDropRate_thread(void* context)
 		{
 			if(step % 100 == 0)
 			{
+
 				if(sweep_dp < 0.01)
 				{
-					sweep_dp *= 2;
+					sweep_dp *= (sweep_dir == 1)?2:0.5;
 				}
 				else
-					sweep_dp += 0.0025;
+					sweep_dp += (sweep_dir == 1)?0.0025:-0.0025;
 				
 				if(sweep_dp > 0.10)
-					sweep_dp += 0.005;
+					sweep_dp += (sweep_dir == 1)?0.005:-0.005;
 
 				if(sweep_dp > 0.20)
-					sweep_dp += 0.005;
+					sweep_dp += (sweep_dir == 1)?0.005:-0.005;
 
 
 
 				if(sweep_dp > DROPRATE_BOUND)
 				{
+					sweep_dp = DROPRATE_BOUND;
+					sweep_dir = -1;
+				}
+
+				if(sweep_dp < 0.0001)
+				{
 					sweep_dp = 0.0001;
+					sweep_dir = 1;
 				}
 
 				//rl_drop_prob = sweep_dp;
@@ -440,8 +450,11 @@ void* UpdateDropRate_thread(void* context)
 
 		//printf("Current Drop Rate %.6lf Queue Size %u Bytes, Qdelay %u  Action %f\n", *_drop_prob, _size_bytes_queue,*_current_qdelay, action);
 	        printStateRing();
-		//uint64_t interval = timestamp() - now;
+		uint64_t interval = timestamp() - now;
+		if(interval < DROPRATE_UPDATE_PERIOD)
+			usleep(1000*(DROPRATE_UPDATE_PERIOD-interval));
 
+		update_interval = timestamp() - now;
 		//printf("%lu\n",interval);
 	}
 return context;
