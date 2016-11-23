@@ -16,8 +16,8 @@ using namespace std;
 #define NN_UPDATE_PERIOD 100
 #define DROPRATE_BOUND 0.1
 #define SWEEP_TIME 0
-#define PATH_TO_PYTHON_INTERFACE "/home/rl/Project/rl-qm/mahimahiInterface/"
-
+//#define PATH_TO_PYTHON_INTERFACE "/home/rl/Project/rl-qm/mahimahiInterface/"
+#define PATH_TO_PYTHON_INTERFACE "/home/songtaohe/Project/QueueManagement/rl-qm/mahimahiInterface/"
 
 
 double * _drop_prob = NULL;
@@ -36,7 +36,7 @@ struct NeuralNetwork{
 	float **b;	
 };
 
-#define STATE_DIM  24
+#define STATE_DIM  4
 struct State{
     float s[STATE_DIM];
 };
@@ -82,6 +82,20 @@ float ring_avg(float* data, int start, int end)
 }
 
 
+float ring_min(float* data, int start, int end)
+{
+    float min = 100000;
+    int ptr = start;
+    while(ptr <= end)
+    {
+        if(data[ptr % 256] < min) min = data[ptr % 256];
+        ptr ++;
+    }
+    return min;
+}
+
+
+/* //This is for 24-dim state, with average item
 void UpdateState(float qdelay, float dprate)
 {
     static float qdelay_list[256];
@@ -111,6 +125,32 @@ void UpdateState(float qdelay, float dprate)
     
     ptr ++;    
 }
+*/
+
+//This is a general state generater
+void UpdateState(float qdelay, float dprate)
+{
+    static float qdelay_list[256];
+    static float dprate_list[256];
+    static int ptr = 256;
+
+    state_cur = &(stateRing.ring[stateRing.counter % STATE_RING_SIZE]);
+    stateRing.counter ++;
+
+    qdelay_list[ptr % 256] = qdelay;
+    dprate_list[ptr % 256] = dprate;
+
+    for(int i = 0; i<STATE_DIM/2; i++)
+    {
+        //state_cur->s[i*2] = qdelay_list[(ptr - STATE_DIM/2 + i + 1)%256];
+        state_cur->s[i*2] = ring_avg(qdelay_list,ptr-15, ptr);
+        state_cur->s[i*2 + 1] = dprate_list[(ptr - STATE_DIM/2 + i + 1)%256];
+    }
+
+    ptr ++;
+}
+
+
 
 
 void printStateRing()
@@ -140,8 +180,8 @@ void printStateRing()
 			   
             }
 		
-            fprintf(fp," %f",stateRing.ring[(stateRing.counter - STATE_RING_SIZE + 1+ i + 1)%STATE_RING_SIZE].s[22]);
-            fprintf(fp," %f",stateRing.ring[(stateRing.counter - STATE_RING_SIZE + 1+ i + 1)%STATE_RING_SIZE].s[23]);
+            fprintf(fp," %f",stateRing.ring[(stateRing.counter - STATE_RING_SIZE + 1+ i + 1)%STATE_RING_SIZE].s[STATE_DIM - 2]);
+            fprintf(fp," %f",stateRing.ring[(stateRing.counter - STATE_RING_SIZE + 1+ i + 1)%STATE_RING_SIZE].s[STATE_DIM - 1]);
 	    fprintf(fp," %lu", update_interval);
             fprintf(fp,"\n");
         }         
@@ -165,13 +205,13 @@ void initNN()
 {
 	pthread_mutex_init(&swap_lock, NULL);
 	//TODO Load Model
-	NN_A.dim_layer[0] = 24;
+	NN_A.dim_layer[0] = STATE_DIM;
 	NN_A.dim_layer[1] = 150;
 	NN_A.dim_layer[2] = 200;
 	NN_A.dim_layer[3] = 150;
 	NN_A.dim_layer[4] = 1;
 
-	NN_B.dim_layer[0] = 24;
+	NN_B.dim_layer[0] = STATE_DIM;
 	NN_B.dim_layer[1] = 150;
 	NN_B.dim_layer[2] = 200;
 	NN_B.dim_layer[3] = 150;
