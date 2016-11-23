@@ -142,8 +142,8 @@ void UpdateState(float qdelay, float dprate)
 
     for(int i = 0; i<STATE_DIM/2; i++)
     {
-        //state_cur->s[i*2] = qdelay_list[(ptr - STATE_DIM/2 + i + 1)%256];
-        state_cur->s[i*2] = ring_avg(qdelay_list,ptr-15, ptr);
+        state_cur->s[i*2] = qdelay_list[(ptr - STATE_DIM/2 + i + 1)%256];
+        //state_cur->s[i*2] = ring_avg(qdelay_list,ptr-15, ptr);
         state_cur->s[i*2 + 1] = dprate_list[(ptr - STATE_DIM/2 + i + 1)%256];
     }
 
