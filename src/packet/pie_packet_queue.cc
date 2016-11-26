@@ -16,8 +16,8 @@ using namespace std;
 #define NN_UPDATE_PERIOD 100
 #define DROPRATE_BOUND 0.1
 
-#define PATH_TO_PYTHON_INTERFACE "/home/rl/Project/rl-qm/mahimahiInterface/"
-//#define PATH_TO_PYTHON_INTERFACE "/home/songtaohe/Project/QueueManagement/rl-qm/mahimahiInterface/"
+//#define PATH_TO_PYTHON_INTERFACE "/home/rl/Project/rl-qm/mahimahiInterface/"
+#define PATH_TO_PYTHON_INTERFACE "/home/songtaohe/Project/QueueManagement/rl-qm/mahimahiInterface/"
 
 
 double * _drop_prob = NULL;
@@ -36,7 +36,7 @@ struct NeuralNetwork{
 	float **b;	
 };
 
-#define STATE_DIM  4
+#define STATE_DIM  16
 struct State{
     float s[STATE_DIM];
 };
@@ -142,8 +142,8 @@ void UpdateState(float qdelay, float dprate)
 
     for(int i = 0; i<STATE_DIM/2; i++)
     {
-        //state_cur->s[i*2] = qdelay_list[(ptr - STATE_DIM/2 + i + 1)%256];
-        state_cur->s[i*2] = ring_avg(qdelay_list,ptr-15, ptr);
+        state_cur->s[i*2] = qdelay_list[(ptr - STATE_DIM/2 + i + 1)%256];
+        //state_cur->s[i*2] = ring_avg(qdelay_list,ptr-15, ptr);
         state_cur->s[i*2 + 1] = dprate_list[(ptr - STATE_DIM/2 + i + 1)%256];
     }
 
