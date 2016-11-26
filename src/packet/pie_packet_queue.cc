@@ -15,9 +15,9 @@ using namespace std;
 #define DROPRATE_UPDATE_PERIOD 40
 #define NN_UPDATE_PERIOD 100
 #define DROPRATE_BOUND 0.1
-#define SWEEP_TIME 0
-//#define PATH_TO_PYTHON_INTERFACE "/home/rl/Project/rl-qm/mahimahiInterface/"
-#define PATH_TO_PYTHON_INTERFACE "/home/songtaohe/Project/QueueManagement/rl-qm/mahimahiInterface/"
+
+#define PATH_TO_PYTHON_INTERFACE "/home/rl/Project/rl-qm/mahimahiInterface/"
+//#define PATH_TO_PYTHON_INTERFACE "/home/songtaohe/Project/QueueManagement/rl-qm/mahimahiInterface/"
 
 
 double * _drop_prob = NULL;
@@ -142,8 +142,8 @@ void UpdateState(float qdelay, float dprate)
 
     for(int i = 0; i<STATE_DIM/2; i++)
     {
-        state_cur->s[i*2] = qdelay_list[(ptr - STATE_DIM/2 + i + 1)%256];
-        //state_cur->s[i*2] = ring_avg(qdelay_list,ptr-15, ptr);
+        //state_cur->s[i*2] = qdelay_list[(ptr - STATE_DIM/2 + i + 1)%256];
+        state_cur->s[i*2] = ring_avg(qdelay_list,ptr-15, ptr);
         state_cur->s[i*2 + 1] = dprate_list[(ptr - STATE_DIM/2 + i + 1)%256];
     }
 
@@ -570,12 +570,13 @@ void PIEPacketQueue::enqueue( QueuedPacket && p )
 //returns true if packet should be dropped.
 bool PIEPacketQueue::drop_early ()
 {
-/*  
+  
   if ( burst_allowance_ > 0 ) {
     return false;
   }
 
-  if ( qdelay_old_ < qdelay_ref_/2 && drop_prob_ < 0.2) {
+  //if ( qdelay_old_ < qdelay_ref_/2 && drop_prob_ < 0.2) {
+  if ( qdelay_old_ < qdelay_ref_/2 && rl_drop_prob < 0.2) {
     return false;        
   }
 
@@ -583,7 +584,7 @@ bool PIEPacketQueue::drop_early ()
     return false;
   }
   
-*/
+
 
 
   double random = uniform_generator_(prng_);
