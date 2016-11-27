@@ -5,7 +5,14 @@
 #include "timestamp.hh"
 #include <unistd.h>
 #include <stdio.h>
+#include <string.h>
 #include <cstdlib>
+#include <sys/types.h>
+#include <sys/socket.h>
+#include <netinet/in.h>
+#include <netdb.h>
+
+
 using namespace std;
 
 #define DQ_COUNT_INVALID   (uint32_t)-1
@@ -24,478 +31,84 @@ double * _drop_prob = NULL;
 double rl_drop_prob = 0.0;
 unsigned int _size_bytes_queue = 0;
 uint32_t * _current_qdelay = NULL;
+uint64_t dq_counter = 0;
+uint64_t eq_counter = 0;
 
 
-
-
-
-#define MAXLAYER 5
-struct NeuralNetwork{
-	int dim_layer[MAXLAYER];
-	float **w;
-	float **b;	
-};
-
-#define STATE_DIM  16
-struct State{
-    float s[STATE_DIM];
-};
-
-
-
-#define STATE_RING_SIZE 16
-struct StateRing{
-    struct State ring[STATE_RING_SIZE];
-    int counter;
-};
-
-
-
-
-
-
-
-
-
-
-struct NeuralNetwork NN_A,NN_B;
-struct NeuralNetwork * NN_cur = NULL; 
-pthread_mutex_t swap_lock;
-
-
-struct StateRing stateRing;
-struct State * state_cur = NULL;
-
-uint64_t update_interval = 0;
-
-
-float ring_avg(float* data, int start, int end)
-{
-    float sum = 0;
-    int ptr = start;
-    while(ptr <= end)
-    {
-        sum += data[ptr % 256];
-        ptr ++;
-    }
-    return sum / (end - start + 1);
-}
-
-
-float ring_min(float* data, int start, int end)
-{
-    float min = 100000;
-    int ptr = start;
-    while(ptr <= end)
-    {
-        if(data[ptr % 256] < min) min = data[ptr % 256];
-        ptr ++;
-    }
-    return min;
-}
-
-
-/* //This is for 24-dim state, with average item
-void UpdateState(float qdelay, float dprate)
-{
-    static float qdelay_list[256];
-    static float dprate_list[256];
-    static int ptr = 256;
-
-    state_cur = &(stateRing.ring[stateRing.counter % STATE_RING_SIZE]);
-    stateRing.counter ++;
-    
-    qdelay_list[ptr % 256] = qdelay;
-    dprate_list[ptr % 256] = dprate;
-    
-    state_cur->s[0] = ring_avg(qdelay_list,ptr-63, ptr);
-    state_cur->s[1] = ring_avg(dprate_list,ptr-63, ptr);
-    state_cur->s[2] = ring_avg(qdelay_list,ptr-31, ptr);
-    state_cur->s[3] = ring_avg(dprate_list,ptr-31, ptr);
-    state_cur->s[4] = ring_avg(qdelay_list,ptr-15, ptr);
-    state_cur->s[5] = ring_avg(dprate_list,ptr-15, ptr);
-    state_cur->s[6] = ring_avg(qdelay_list,ptr-7, ptr);
-    state_cur->s[7] = ring_avg(dprate_list,ptr-7, ptr);
-
-    for(int i = 0; i<8; i++)
-    {
-        state_cur->s[i*2+8] = qdelay_list[(ptr - 7 + i)%256];
-        state_cur->s[i*2+8+1] = dprate_list[(ptr - 7 + i)%256];
-    }
-    
-    ptr ++;    
-}
-*/
-
-//This is a general state generater
-void UpdateState(float qdelay, float dprate)
-{
-    static float qdelay_list[256];
-    static float dprate_list[256];
-    static int ptr = 256;
-
-    state_cur = &(stateRing.ring[stateRing.counter % STATE_RING_SIZE]);
-    stateRing.counter ++;
-
-    qdelay_list[ptr % 256] = qdelay;
-    dprate_list[ptr % 256] = dprate;
-
-    for(int i = 0; i<STATE_DIM/2; i++)
-    {
-        state_cur->s[i*2] = qdelay_list[(ptr - STATE_DIM/2 + i + 1)%256];
-        //state_cur->s[i*2] = ring_avg(qdelay_list,ptr-15, ptr);
-        state_cur->s[i*2 + 1] = dprate_list[(ptr - STATE_DIM/2 + i + 1)%256];
-    }
-
-    ptr ++;
-}
-
-
-
-
-void printStateRing()
-{
-    FILE *fp = NULL;
-    //FILE *fp_lock = NULL;
-
-    //fp_lock = fopen("/home/rl/Project/rl-qm/mahimahiInterface/statering_lock.txt","w");
-    //flock(fileno(fp_lock), LOCK_EX);
-    char filename[512];
-    sprintf(filename,"%sstatering.txt",PATH_TO_PYTHON_INTERFACE);
-
-    fp = fopen(filename,"w");
-
-    if(fp == NULL)
-    {
-        printf("Failed to open statering file\n");
-    }
-    else
-    {
-        for(int i = -2; i<STATE_RING_SIZE - 2; i++)
-        {
-            fprintf(fp,"%d", stateRing.counter - STATE_RING_SIZE + 1+ i);
-            for(int j = 0; j< STATE_DIM; j++)
-            {
-               fprintf(fp," %f",stateRing.ring[(stateRing.counter - STATE_RING_SIZE + 1+ i)%STATE_RING_SIZE].s[j]);
-			   
-            }
-		
-            fprintf(fp," %f",stateRing.ring[(stateRing.counter - STATE_RING_SIZE + 1+ i + 1)%STATE_RING_SIZE].s[STATE_DIM - 2]);
-            fprintf(fp," %f",stateRing.ring[(stateRing.counter - STATE_RING_SIZE + 1+ i + 1)%STATE_RING_SIZE].s[STATE_DIM - 1]);
-	    fprintf(fp," %lu", update_interval);
-            fprintf(fp,"\n");
-        }         
-
-
-        fclose(fp);
-    }
-    
-
-    //flock(fileno(fp_lock), LOCK_UN);
-    //fclose(fp_lock);
-
-
-}
-
-
-
-
-
-void initNN()
-{
-	pthread_mutex_init(&swap_lock, NULL);
-	//TODO Load Model
-	NN_A.dim_layer[0] = STATE_DIM;
-	NN_A.dim_layer[1] = 150;
-	NN_A.dim_layer[2] = 200;
-	NN_A.dim_layer[3] = 150;
-	NN_A.dim_layer[4] = 1;
-
-	NN_B.dim_layer[0] = STATE_DIM;
-	NN_B.dim_layer[1] = 150;
-	NN_B.dim_layer[2] = 200;
-	NN_B.dim_layer[3] = 150;
-	NN_B.dim_layer[4] = 1;
-
-	NN_A.w = (float**)malloc(sizeof(float*) * MAXLAYER);
-	NN_B.w = (float**)malloc(sizeof(float*) * MAXLAYER);
-	NN_A.b = (float**)malloc(sizeof(float*) * MAXLAYER);
-	NN_B.b = (float**)malloc(sizeof(float*) * MAXLAYER);
-
-	for(int i = 0; i< MAXLAYER-1; i++) NN_A.w[i] = (float*)malloc(sizeof(float) * NN_A.dim_layer[i] * NN_A.dim_layer[i+1]);
- 	for(int i = 0; i< MAXLAYER-1; i++) NN_B.w[i] = (float*)malloc(sizeof(float) * NN_B.dim_layer[i] * NN_B.dim_layer[i+1]);
- 	for(int i = 0; i< MAXLAYER-1; i++) NN_A.b[i] = (float*)malloc(sizeof(float) * NN_A.dim_layer[i+1]);
-	for(int i = 0; i< MAXLAYER-1; i++) NN_B.b[i] = (float*)malloc(sizeof(float) * NN_B.dim_layer[i+1]);
- 	
-
-
-	NN_cur = &NN_A;
-    stateRing.counter = STATE_RING_SIZE;
-}
-
-
-void RunNN(float *input, float* output)
-{
-	float bufA[256];
-	float bufB[256];
-
-	float * pin;
-	float * pout;
-
-	pin = input;
-	pout = bufA;
-
-
-	if(NN_cur == NULL) initNN();
-
-	pthread_mutex_lock(&swap_lock);
-	
-		for(int i = 0; i< MAXLAYER-1; i++)
-		{
-			
-			for(int k=0; k<NN_cur->dim_layer[i+1]; k++)
-			{
-				pout[k] = NN_cur->b[i][k];
-			}
-
-			for(int j=0; j< NN_cur->dim_layer[i]; j++)
-			{
-				for(int k=0; k<NN_cur->dim_layer[i+1]; k++)
-				{
-					pout[k] = pout[k] + pin[j] * NN_cur->w[i][j*NN_cur->dim_layer[i+1] + k];
-					//if(i==0 && j==0 && k<10) printf("%f ", NN_cur->w[i][j*NN_cur->dim_layer[i+1] + k]);
-				}
-			}
-
-			if(i != MAXLAYER-2)
-				for(int k=0; k<NN_cur->dim_layer[i+1]; k++)
-				{
-					//printf("%d %f\n",i,pout[k]);
-					pout[k] = pout[k] > 0? pout[k]: 0;
-					
-				}
-
-			
-			pin = pout;
-			if(pout == bufA) pout = bufB;
-			else pout = bufA;
-
-			if(i == MAXLAYER-3) pout = output;
-		}
-
-	pthread_mutex_unlock(&swap_lock);
-
-	pin[0] = 1/(1.0+exp(-pin[0])) * DROPRATE_BOUND;
-
-
-}
-
-
-void SwapNN()
-{
-	pthread_mutex_lock(&swap_lock);
-
-		if(NN_cur == &NN_A) NN_cur = &NN_B;
-		else NN_cur = &NN_A;
-
-	pthread_mutex_unlock(&swap_lock);
-}
-
-
-
-//Update Neure Network Model (Load from file)
-void* NN_thread(void* context)
-{
-	int ret = 0;
-	struct NeuralNetwork * NN;
-	int total_read = 0;
-	while(true)
-	{
-		usleep(100*1000); // Every 100ms
-		//printf("This is NN thread Load \n");
-
-		//TODO Load Parameter
-		if(NN_cur == &NN_A)
-		{
-			NN = &NN_B;
-		}
-		else
-		{
-			NN = &NN_A;
-		}
-		ret = 0;
-		FILE *fp = NULL;
-		FILE *fp_lock = NULL;
-
-		char filename[512];
-		sprintf(filename,"%sNN_lock.txt",PATH_TO_PYTHON_INTERFACE);
-
-
-
-		fp_lock = fopen(filename,"r");
-		flock(fileno(fp_lock), LOCK_EX);
-
-
-
-		sprintf(filename,"%sNN.txt",PATH_TO_PYTHON_INTERFACE);
-
-
-		fp = fopen(filename,"r");
-		
-		total_read = 0;
-		if(fp == NULL)
-		{
-			printf("Failed to load parameters\n");
-			usleep(1000*NN_UPDATE_PERIOD);//
-		}
-		else
-		{
-			//flock(fileno(fp), LOCK_EX);
-			//fclose(fp);
-			//fp = fopen("/home/rl/Project/rl-qm/mahimahiInterface/NN.txt","r");
-
-			total_read = 0;
-			//printf("Load Parameters\n");
-			for(int i=0;i<MAXLAYER-1;i++)
-			{
-				for(int j=0; j< NN->dim_layer[i] * NN->dim_layer[i+1]; j++)
-				{
-					ret += fscanf(fp,"%f",&(NN->w[i][j]));
-					total_read ++;
-				}
-				for(int j=0; j< NN->dim_layer[i+1]; j++)
-				{
-					ret += fscanf(fp,"%f",&(NN->b[i][j]));
-					total_read ++;
-				}
-
-			}
-			//flock(fileno(fp), LOCK_UN);			
-			fclose(fp);
-		}
-		
-		flock(fileno(fp_lock), LOCK_UN);
-		fclose(fp_lock);
-
-
-
-		//printf("Swap NN Parameters\n");
-		//Swap Buffer
-		//printf("%d\n",total_read);
-
-		if(ret == total_read)
-			SwapNN();
-		else
-		{
-			//printf("Load NN Parameters failed %d/%d\n",ret, total_read);
-		}
-
-	}
-	return context;
-}
 
 
 //Update Drop Rate 
 void* UpdateDropRate_thread(void* context)
 {
-	//float state[24];
-	float action;
-    static float action_old = 0;
-	FILE *fp = NULL;
-	static int sweep = 1;
-	static int step = 0;
-	static float sweep_dp = 0.00001;
-	static int sweep_dir = 1; // 1 or -1
+	int socketfd = 0;
+	int clientfd = 0;
+	socklen_t clilen;
+	char buffer[1024];
+
+	struct sockaddr_in serv_addr, cli_addr;
+
 	
+
+	socketfd = socket(AF_INET, SOCK_STREAM, 0);
+
+	bzero((char*) &serv_addr, sizeof(serv_addr));
+
+	serv_addr.sin_family = AF_INET;
+	serv_addr.sin_addr.s_addr = INADDR_ANY;
+	serv_addr.sin_port = htons(4999);
+	
+	int ret_bind = bind(socketfd, (struct sockaddr *) &serv_addr, sizeof(serv_addr));
+
+	int ret_listen = listen(socketfd, 5);
+	clilen = sizeof(cli_addr);
+	printf("Start to listen %d %d %d\n", socketfd, ret_bind, ret_listen);
 	while(true)
 	{
-		step++;
-		//if(step * DROPRATE_UPDATE_PERIOD > SWEEP_TIME * 1000 ) sweep = 0;
-		//We give the control of this to python.
-
-
-		uint64_t now = timestamp();
-	
-		UpdateState((float)(*_current_qdelay), action_old);
-	
-		state_cur = &(stateRing.ring[(stateRing.counter -1) % STATE_RING_SIZE]);
-	
-		RunNN(state_cur->s, &action);
-
-		//for(int i = 0; i<24; i++) state[i] = i;
-		//state_cur = &(stateRing.ring[stateRing.counter % STATE_RING_SIZE]);
-		//RunNN(state_cur->s, &action);
-        
-        //UpdateState((float)(*_current_qdelay), action_old);
-
-
-        action_old = action;
-		char filename[512];
-		sprintf(filename,"%ssweep.txt",PATH_TO_PYTHON_INTERFACE);
-
-
-		fp = fopen(filename,"r");
-
-		if(fp!=NULL)
+		clientfd = accept(socketfd, (struct sockaddr*) &cli_addr, &clilen);
+		if(clientfd < 0)
 		{
-			int ret = fscanf(fp,"%d",&sweep);
-			if(ret == 0) sweep = 0;
-			fclose(fp);
-		}
-
-		if(sweep == 0)
-		{
-			rl_drop_prob = action * 0.25 + rl_drop_prob * 0.75;
-		}
-		else
-		{
-			if(step % 100 == 0)
+			printf("ERROR on ACCEPT\n");
+			return NULL;
+		}	
+		printf("Accept successfully\n");
+		
+		while(true)
+		{		
+			bzero(buffer,1024);
+			int n = read(clientfd, buffer, 1023);
+			if(n <= 0)
 			{
-
-				if(sweep_dp < 0.01)
-				{
-					sweep_dp *= (sweep_dir == 1)?2:0.5;
-				}
-				else
-					sweep_dp += (sweep_dir == 1)?0.0025:-0.0025;
-				
-				if(sweep_dp > 0.10)
-					sweep_dp += (sweep_dir == 1)?0.005:-0.005;
-
-				if(sweep_dp > 0.20)
-					sweep_dp += (sweep_dir == 1)?0.005:-0.005;
-
-
-
-				if(sweep_dp > DROPRATE_BOUND)
-				{
-					sweep_dp = DROPRATE_BOUND;
-					sweep_dir = -1;
-				}
-
-				if(sweep_dp < 0.0001)
-				{
-					sweep_dp = 0.0001;
-					sweep_dir = 1;
-				}
-
-				//rl_drop_prob = sweep_dp;
-				//action_old = sweep_dp;		
+				printf("Client Disappeared... (read) \n");
+				close(clientfd);
+				break;
 			}
-			float r = static_cast <float> (rand()) / static_cast <float> (RAND_MAX);
-			rl_drop_prob = sweep_dp + (sweep_dp*0.05)*(2*r-1.0);
-			if(rl_drop_prob < 0) rl_drop_prob = 0;
-			action_old = rl_drop_prob;		
+
+			printf("Read %s\n", buffer);
+		
+			if(buffer[0] == 'W')
+			{
+				int a = 0;
+				sscanf(buffer, "W %d %d %d %lf", &a, &a, &a, &rl_drop_prob);
+				
+
+			}
+			
+			if(buffer[0] == 'R')
+			{
+				sprintf(buffer, "%lu 0 0 0  0 0 %lu %u 0 0 0\n", eq_counter, dq_counter, *_current_qdelay);
+				int ret = write(clientfd,buffer,strlen(buffer));
+				if(ret <= 0)
+				{
+					printf("Client Disappeared... (write) \n");
+					close(clientfd);
+					break;
+				}
+			}
+
+		
+
 		}
 
-		//printf("Current Drop Rate %.6lf Queue Size %u Bytes, Qdelay %u  Action %f\n", *_drop_prob, _size_bytes_queue,*_current_qdelay, action);
-	        printStateRing();
-		uint64_t interval = timestamp() - now;
-		if(interval < DROPRATE_UPDATE_PERIOD)
-			usleep(1000*(DROPRATE_UPDATE_PERIOD-interval));
-
-		update_interval = timestamp() - now;
-		//printf("%lu\n",interval);
 	}
 return context;
 }
@@ -534,12 +147,10 @@ PIEPacketQueue::PIEPacketQueue( const string & args )
 void PIEPacketQueue::enqueue( QueuedPacket && p )
 {
 	static int counter = 0;
-
+	eq_counter ++;
 	counter++;
 	if(counter == 2)
 	{
-    initNN();
-		pthread_create(&(this->NN_t),NULL,&NN_thread,NULL);
 		pthread_create(&(this->DP_t),NULL,&UpdateDropRate_thread,NULL);
 		printf("Create Pthread!\n");
 	}
@@ -570,7 +181,7 @@ void PIEPacketQueue::enqueue( QueuedPacket && p )
 //returns true if packet should be dropped.
 bool PIEPacketQueue::drop_early ()
 {
-  
+ /* 
   if ( burst_allowance_ > 0 ) {
     return false;
   }
@@ -583,7 +194,7 @@ bool PIEPacketQueue::drop_early ()
   if ( size_bytes() < (2 * PACKET_SIZE) ) {
     return false;
   }
-  
+  */
 
 
 
@@ -601,6 +212,8 @@ QueuedPacket PIEPacketQueue::dequeue( void )
 {
   QueuedPacket ret = std::move( DroppingPacketQueue::dequeue () );
   uint32_t now = timestamp();
+
+  dq_counter ++;
 
   if ( size_bytes() >= dq_threshold_ && dq_count_ == DQ_COUNT_INVALID ) {
     dq_tstamp_ = now;
