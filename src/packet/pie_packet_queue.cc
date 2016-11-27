@@ -83,7 +83,7 @@ void* UpdateDropRate_thread(void* context)
 				break;
 			}
 
-			printf("Read %s\n", buffer);
+			//printf("Read %s\n", buffer);
 		
 			if(buffer[0] == 'W')
 			{
