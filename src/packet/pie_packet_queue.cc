@@ -155,6 +155,17 @@ void PIEPacketQueue::enqueue( QueuedPacket && p )
 		printf("Create Pthread!\n");
 	}
   calculate_drop_prob();
+
+
+	//std::cout << "Packet : " << p.contents;
+	//const char * header = p.contents.c_str();
+	//for(int i = 0;i< 32;i++)
+	//{
+	//	printf("%2x ",(unsigned char)header[i]);
+	//}
+	//printf("\n");
+
+
 	
   _drop_prob = &(this->drop_prob_);
 	_current_qdelay = &(this->current_qdelay_);
