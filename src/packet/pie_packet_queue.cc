@@ -35,6 +35,8 @@ uint64_t dq_counter = 0;
 uint64_t eq_counter = 0;
 
 
+int state_rl_enable = 0;
+
 
 
 //Update Drop Rate 
@@ -88,14 +90,16 @@ void* UpdateDropRate_thread(void* context)
 			if(buffer[0] == 'W')
 			{
 				int a = 0;
-				sscanf(buffer, "W %d %d %d %lf", &a, &a, &a, &rl_drop_prob);
+				int b = 0;
+				int c = 0;
+				sscanf(buffer, "W %d %d %d %lf", &a, &b, &c, &rl_drop_prob);
 				
-
+				state_rl_enable = b;
 			}
 			
 			if(buffer[0] == 'R')
 			{
-				sprintf(buffer, "%lu 0 0 0  0 0 %lu %u 0 0 0\n", eq_counter, dq_counter, *_current_qdelay);
+				sprintf(buffer, "%lu 0 0 0  0 0 %lu %u %f 0 0\n", eq_counter, dq_counter, *_current_qdelay, *_drop_prob );
 				int ret = write(clientfd,buffer,strlen(buffer));
 				if(ret <= 0)
 				{
@@ -200,8 +204,13 @@ bool PIEPacketQueue::drop_early ()
 
   double random = uniform_generator_(prng_);
 
-  //if ( random < drop_prob_ ) {
-  if ( random < rl_drop_prob ) {
+  if(state_rl_enable == 1)
+  {
+    drop_prob_ = rl_drop_prob;
+  }
+
+  if ( random < drop_prob_ ) {
+  //if ( random < rl_drop_prob ) {
     return true;
   }
   else
