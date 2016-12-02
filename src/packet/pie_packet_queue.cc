@@ -30,7 +30,7 @@ using namespace std;
 double * _drop_prob = NULL;
 double rl_drop_prob = 0.0;
 unsigned int _size_bytes_queue = 0;
-uint32_t * _current_qdelay = NULL;
+uint32_t  _current_qdelay = 0;
 uint64_t dq_counter = 0;
 uint64_t eq_counter = 0;
 
@@ -99,7 +99,7 @@ void* UpdateDropRate_thread(void* context)
 			
 			if(buffer[0] == 'R')
 			{
-				sprintf(buffer, "%lu 0 0 0  0 0 %lu %u %f 0 0\n", eq_counter, dq_counter, *_current_qdelay, *_drop_prob );
+				sprintf(buffer, "%lu 0 0 0  0 0 %lu %u %f 0 0\n", eq_counter, dq_counter, _current_qdelay, *_drop_prob );
 				int ret = write(clientfd,buffer,strlen(buffer));
 				if(ret <= 0)
 				{
@@ -126,7 +126,7 @@ PIEPacketQueue::PIEPacketQueue( const string & args )
     max_burst_ ( get_arg( args, "max_burst" ) ),
     alpha_ ( 0.125 ),
     beta_ ( 1.25 ),
-    t_update_ ( 10 ),
+    t_update_ ( 20 ),
     dq_threshold_ ( 16384 ),
     drop_prob_ ( 0.0 ),
     burst_allowance_ ( 0 ),
@@ -161,7 +161,13 @@ void PIEPacketQueue::enqueue( QueuedPacket && p )
   calculate_drop_prob();
 	
   _drop_prob = &(this->drop_prob_);
-	_current_qdelay = &(this->current_qdelay_);
+	//_current_qdelay = &(this->current_qdelay_);
+	if ( this->avg_dq_rate_ > 0 ) 
+      _current_qdelay = size_bytes() / this->avg_dq_rate_;
+    else
+      _current_qdelay = 0;
+
+
 	_size_bytes_queue = size_bytes();
 
   //printf("%u\n",size_bytes());

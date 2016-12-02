@@ -5,6 +5,7 @@
 
 #include <random>
 #include "dropping_packet_queue.hh"
+#include <pthread.h>
 
 struct dodequeue_result {
     QueuedPacket p;
@@ -43,6 +44,8 @@ private:
 
     dodequeue_result dodequeue ( uint64_t now );
     uint64_t control_law ( uint64_t t, uint32_t count );
+
+    pthread_t DP_t;
 
 public:
     CODELPacketQueue( const std::string & args );
