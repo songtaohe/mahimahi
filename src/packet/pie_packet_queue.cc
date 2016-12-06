@@ -33,7 +33,7 @@ unsigned int _size_bytes_queue = 0;
 uint32_t  _current_qdelay = 0;
 uint64_t dq_counter = 0;
 uint64_t eq_counter = 0;
-
+uint64_t dq_bytes = 0;
 
 int state_rl_enable = 0;
 
@@ -99,7 +99,7 @@ void* UpdateDropRate_thread(void* context)
 			
 			if(buffer[0] == 'R')
 			{
-				sprintf(buffer, "%lu 0 0 0  0 0 %lu %u %f 0 0\n", eq_counter, dq_counter, _current_qdelay, *_drop_prob );
+				sprintf(buffer, "%lu 0 0 0  0 %lu %lu %u %f 0 0\n", eq_counter, dq_bytes, dq_counter, _current_qdelay, *_drop_prob );
 				int ret = write(clientfd,buffer,strlen(buffer));
 				if(ret <= 0)
 				{
@@ -191,20 +191,23 @@ void PIEPacketQueue::enqueue( QueuedPacket && p )
 //returns true if packet should be dropped.
 bool PIEPacketQueue::drop_early ()
 {
- /* 
+
+  if(state_rl_enable == 0)
+  {  
   if ( burst_allowance_ > 0 ) {
     return false;
   }
 
-  //if ( qdelay_old_ < qdelay_ref_/2 && drop_prob_ < 0.2) {
-  if ( qdelay_old_ < qdelay_ref_/2 && rl_drop_prob < 0.2) {
+  if ( qdelay_old_ < qdelay_ref_/2 && drop_prob_ < 0.2) {
+  //if ( qdelay_old_ < qdelay_ref_/2 && rl_drop_prob < 0.2) {
     return false;        
   }
 
   if ( size_bytes() < (2 * PACKET_SIZE) ) {
     return false;
   }
-  */
+  }
+  
 
 
 
@@ -229,6 +232,7 @@ QueuedPacket PIEPacketQueue::dequeue( void )
   uint32_t now = timestamp();
 
   dq_counter ++;
+  dq_bytes += ret.contents.size();
 
   if ( size_bytes() >= dq_threshold_ && dq_count_ == DQ_COUNT_INVALID ) {
     dq_tstamp_ = now;

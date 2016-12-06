@@ -14,6 +14,7 @@
 using namespace std;
 
 static uint64_t dq_counter = 0;
+static uint64_t dq_bytes = 0;
 static uint64_t eq_counter = 0;
 static uint32_t  _current_qdelay = 0;
 //Update Drop Rate 
@@ -77,7 +78,7 @@ static void* UpdateDropRate_thread(void* context)
 			
 			if(buffer[0] == 'R')
 			{
-				sprintf(buffer, "%lu 0 0 0  0 0 %lu %u %f 0 0\n", eq_counter, dq_counter, _current_qdelay, 0.0f );
+				sprintf(buffer, "%lu 0 0 0  0 %lu %lu %u %f 0 0\n", eq_counter, dq_bytes, dq_counter, _current_qdelay, 0.0f );
 				int ret = write(clientfd,buffer,strlen(buffer));
 				if(ret <= 0)
 				{
@@ -167,6 +168,7 @@ QueuedPacket CODELPacketQueue::dequeue( void )
 {   
   const uint64_t now = timestamp();
   dodequeue_result r = std::move( dodequeue ( now ) );
+  dq_bytes += r.p.contents.size();
   uint32_t delta;
   dq_counter ++;
   if ( dropping_ ) {
