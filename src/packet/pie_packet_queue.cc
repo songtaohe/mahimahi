@@ -31,6 +31,7 @@ double * _drop_prob = NULL;
 double rl_drop_prob = 0.0;
 unsigned int _size_bytes_queue = 0;
 uint32_t  _current_qdelay = 0;
+uint32_t  _current_qdelay_perpacket = 0;
 uint64_t dq_counter = 0;
 uint64_t eq_counter = 0;
 uint64_t dq_bytes = 0;
@@ -99,7 +100,8 @@ void* UpdateDropRate_thread(void* context)
 			
 			if(buffer[0] == 'R')
 			{
-				sprintf(buffer, "%lu 0 0 0  0 %lu %lu %u %f 0 0\n", eq_counter, dq_bytes, dq_counter, _current_qdelay, *_drop_prob );
+				//sprintf(buffer, "%lu 0 0 0  0 %lu %lu %u %f 0 0\n", eq_counter, dq_bytes, dq_counter, _current_qdelay, *_drop_prob );
+				sprintf(buffer, "%lu 0 0 0  0 %lu %lu %u %f 0 0\n", eq_counter, dq_bytes, dq_counter, _current_qdelay_perpacket, *_drop_prob );
 				int ret = write(clientfd,buffer,strlen(buffer));
 				if(ret <= 0)
 				{
@@ -230,6 +232,8 @@ QueuedPacket PIEPacketQueue::dequeue( void )
 {
   QueuedPacket ret = std::move( DroppingPacketQueue::dequeue () );
   uint32_t now = timestamp();
+
+  _current_qdelay_perpacket = now - ret.arrival_time;
 
   dq_counter ++;
   dq_bytes += ret.contents.size();
