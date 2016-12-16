@@ -2,6 +2,7 @@
 
 #include <limits>
 #include <cassert>
+#include <stdio.h>
 
 #include "link_queue.hh"
 #include "timestamp.hh"
@@ -171,6 +172,7 @@ uint64_t LinkQueue::next_delivery_time( void ) const
 
 void LinkQueue::use_a_delivery_opportunity( void )
 {
+	static int repeat_count = 0;
     record_departure_opportunity();
 
     next_delivery_ = (next_delivery_ + 1) % schedule_.size();
@@ -178,6 +180,11 @@ void LinkQueue::use_a_delivery_opportunity( void )
     /* wraparound */
     if ( next_delivery_ == 0 ) {
         if ( repeat_ ) {
+			//TODO
+			FILE * fp = fopen("repeat","wt");
+			fprintf(fp,"%d\n", repeat_count++);
+			fclose(fp);
+ 
             base_timestamp_ += schedule_.back();
         } else {
             finished_ = true;
