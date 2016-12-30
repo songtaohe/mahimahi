@@ -35,6 +35,12 @@ uint32_t  _current_qdelay_perpacket = 0;
 uint64_t dq_counter = 0;
 uint64_t eq_counter = 0;
 uint64_t dq_bytes = 0;
+uint64_t eq_bytes = 0;
+uint64_t q_empty_time = 0;
+int q_empty = 0;
+uint64_t q_empty_ts = 0;
+
+
 
 int state_rl_enable = 0;
 
@@ -101,7 +107,7 @@ void* UpdateDropRate_thread(void* context)
 			if(buffer[0] == 'R')
 			{
 				//sprintf(buffer, "%lu 0 0 0  0 %lu %lu %u %f 0 0\n", eq_counter, dq_bytes, dq_counter, _current_qdelay, *_drop_prob );
-				sprintf(buffer, "%lu 0 0 0  0 %lu %lu %u %f 0 0\n", eq_counter, dq_bytes, dq_counter, _current_qdelay_perpacket, *_drop_prob );
+				sprintf(buffer, "%lu 0 0 0  0 %lu %lu %u %f 0 0 %lu %lu\n", eq_counter, dq_bytes, dq_counter, _current_qdelay_perpacket, *_drop_prob, eq_bytes, q_empty_time );
 				int ret = write(clientfd,buffer,strlen(buffer));
 				if(ret <= 0)
 				{
@@ -154,6 +160,7 @@ void PIEPacketQueue::enqueue( QueuedPacket && p )
 {
 	static int counter = 0;
 	eq_counter ++;
+	eq_bytes += p.contents.size();
 	counter++;
 	if(counter == 2)
 	{
@@ -181,6 +188,13 @@ void PIEPacketQueue::enqueue( QueuedPacket && p )
   } 
 
   if (!drop_early() ) {
+	if(size_packets() == 0 && q_empty == 1)
+	{
+      q_empty = 0;
+      q_empty_time += timestamp() - q_empty_ts;
+	  q_empty_ts = timestamp();
+	}
+
     //This is the negation of the pseudo code in the IETF draft.
     //It is used to enqueue rather than drop the packet
     //All other packets are dropped
@@ -232,6 +246,12 @@ QueuedPacket PIEPacketQueue::dequeue( void )
 {
   QueuedPacket ret = std::move( DroppingPacketQueue::dequeue () );
   uint32_t now = timestamp();
+
+  if(size_packets() == 0 && q_empty == 0)
+  {
+    q_empty_ts = now;
+    q_empty = 1;
+  }
 
   _current_qdelay_perpacket = now - ret.arrival_time;
 
