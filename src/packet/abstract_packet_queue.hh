@@ -19,6 +19,10 @@ public:
     virtual ~AbstractPacketQueue() = default;
 
     virtual std::string to_string( void ) const = 0;
+
+	std::vector<uint64_t> * schedule = NULL;
+	unsigned int link_ptr = 0;
+
 };
 
 #endif /* ABSTRACT_PACKET_QUEUE */ 
