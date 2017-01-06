@@ -101,6 +101,10 @@ LinkQueue::LinkQueue( const string & link_name, const string & filename, const s
                                                  1, false, 250,
                                                  [] ( int, int & x ) { x = -1; } ) );
     }
+
+	packet_queue_->schedule = &schedule_;
+	packet_queue_->link_ptr = 0;
+	
 }
 
 void LinkQueue::record_arrival( const uint64_t arrival_time, const size_t pkt_size )
@@ -176,6 +180,8 @@ void LinkQueue::use_a_delivery_opportunity( void )
     record_departure_opportunity();
 
     next_delivery_ = (next_delivery_ + 1) % schedule_.size();
+	
+	packet_queue_->link_ptr = next_delivery_;
 
     /* wraparound */
     if ( next_delivery_ == 0 ) {

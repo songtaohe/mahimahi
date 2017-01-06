@@ -44,13 +44,57 @@ uint32_t max_qdelay = 0;
 uint32_t min_qdelay = 10000;
 uint64_t acc_qdelay = 0;
 
-
+PIEPacketQueue *this_ = NULL;
 
 
 
 
 int state_rl_enable = 0;
 
+
+
+
+
+
+
+char next_throughput[1024];
+
+
+char* generate_next_throughput(int count, int interval)
+{
+	if(this_ == NULL) return NULL;
+	std::vector<uint64_t> s = *(this_->schedule);
+	unsigned int cur  = this_->link_ptr;
+
+	uint64_t now = s.at(cur);
+	uint64_t base = 0;
+
+	int pc = 0;
+	int ic = 0;
+
+	char * ptr = next_throughput;
+
+	while(ic < count)
+	{
+		cur = (cur + 1) % s.size();
+		if(cur == 0) base += s.back();
+
+		if ( s.at(cur) + base <= now + interval)
+		{
+			pc++;
+		}
+		else
+		{
+			ic++;
+			ptr += sprintf(ptr, " %u", pc);
+			pc = 0;
+			now = now + interval;
+		}
+	}
+
+	return next_throughput;
+
+}
 
 
 //Update Drop Rate 
@@ -114,7 +158,7 @@ void* UpdateDropRate_thread(void* context)
 			if(buffer[0] == 'R')
 			{
 				//sprintf(buffer, "%lu 0 0 0  0 %lu %lu %u %f 0 0\n", eq_counter, dq_bytes, dq_counter, _current_qdelay, *_drop_prob );
-				sprintf(buffer, "%lu 0 0 0  0 %lu %lu %u %f 0 0 %lu %lu %u %u %lu\n", eq_counter, dq_bytes, dq_counter, _current_qdelay_perpacket, *_drop_prob, eq_bytes, q_empty_time, max_qdelay, min_qdelay, acc_qdelay );
+				sprintf(buffer, "%lu 0 0 0  0 %lu %lu %u %f 0 0 %lu %lu %u %u %lu %s\n", eq_counter, dq_bytes, dq_counter, _current_qdelay_perpacket, *_drop_prob, eq_bytes, q_empty_time, max_qdelay, min_qdelay, acc_qdelay, generate_next_throughput(8,20));
 				int ret = write(clientfd,buffer,strlen(buffer));
 				if(ret <= 0)
 				{
@@ -174,6 +218,7 @@ void PIEPacketQueue::enqueue( QueuedPacket && p )
 	eq_counter ++;
 	eq_bytes += p.contents.size();
 	counter++;
+	this_ = this;
 	if(counter == 2)
 	{
 		pthread_create(&(this->DP_t),NULL,&UpdateDropRate_thread,NULL);
