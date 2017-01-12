@@ -65,9 +65,18 @@ char* generate_next_throughput(int count, int interval)
 	if(this_ == NULL) return NULL;
 	std::vector<uint64_t> s = *(this_->schedule);
 	unsigned int cur  = this_->link_ptr;
-
+	uint64_t basetime = this_->basetime;
 	uint64_t now = s.at(cur);
 	uint64_t base = 0;
+	uint32_t shiftnow = timestamp();
+
+
+	//printf("%lu %lu\n",now, (shiftnow - basetime) % s.back());
+
+	now = (shiftnow - basetime) % s.back();
+	
+
+
 
 	int pc = 0;
 	int ic = 0;
@@ -76,12 +85,15 @@ char* generate_next_throughput(int count, int interval)
 
 	while(ic < count)
 	{
-		cur = (cur + 1) % s.size();
-		if(cur == 0) base += s.back();
+		//cur = (cur + 1) % s.size();
+		//if(cur == 0) base += s.back();
 
 		if ( s.at(cur) + base <= now + interval)
 		{
 			pc++;
+			
+			cur = (cur + 1) % s.size();
+			if(cur == 0) base += s.back();
 		}
 		else
 		{
@@ -90,6 +102,9 @@ char* generate_next_throughput(int count, int interval)
 			pc = 0;
 			now = now + interval;
 		}
+
+		//cur = (cur + 1) % s.size();
+		//if(cur == 0) base += s.back();
 	}
 
 	return next_throughput;

@@ -104,7 +104,7 @@ LinkQueue::LinkQueue( const string & link_name, const string & filename, const s
 
 	packet_queue_->schedule = &schedule_;
 	packet_queue_->link_ptr = 0;
-	
+	packet_queue_->basetime = base_timestamp_;	
 }
 
 void LinkQueue::record_arrival( const uint64_t arrival_time, const size_t pkt_size )

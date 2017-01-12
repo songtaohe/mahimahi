@@ -22,6 +22,7 @@ public:
 
 	std::vector<uint64_t> * schedule = NULL;
 	unsigned int link_ptr = 0;
+	uint64_t basetime = 0;
 
 };
 
