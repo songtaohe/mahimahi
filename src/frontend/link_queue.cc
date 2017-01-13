@@ -12,6 +12,7 @@
 
 using namespace std;
 
+static int repeat_count = 0;
 LinkQueue::LinkQueue( const string & link_name, const string & filename, const string & logfile,
                       const bool repeat, const bool graph_throughput, const bool graph_delay,
                       unique_ptr<AbstractPacketQueue> && packet_queue,
@@ -110,7 +111,7 @@ LinkQueue::LinkQueue( const string & link_name, const string & filename, const s
 void LinkQueue::record_arrival( const uint64_t arrival_time, const size_t pkt_size )
 {
     /* log it */
-    if ( log_ ) {
+    if ( log_ && repeat_count == 1 ) {
         *log_ << arrival_time << " + " << pkt_size << endl;
     }
 
@@ -123,7 +124,7 @@ void LinkQueue::record_arrival( const uint64_t arrival_time, const size_t pkt_si
 void LinkQueue::record_departure_opportunity( void )
 {
     /* log the delivery opportunity */
-    if ( log_ ) {
+    if ( log_ && repeat_count == 1) {
         *log_ << next_delivery_time() << " # " << PACKET_SIZE << endl;
     }
 
@@ -136,7 +137,7 @@ void LinkQueue::record_departure_opportunity( void )
 void LinkQueue::record_departure( const uint64_t departure_time, const QueuedPacket & packet )
 {
     /* log the delivery */
-    if ( log_ ) {
+    if ( log_ && repeat_count == 1) {
         *log_ << departure_time << " - " << packet.contents.size()
               << " " << departure_time - packet.arrival_time << endl;
     }
@@ -176,7 +177,6 @@ uint64_t LinkQueue::next_delivery_time( void ) const
 
 void LinkQueue::use_a_delivery_opportunity( void )
 {
-	static int repeat_count = 0;
     record_departure_opportunity();
 
     next_delivery_ = (next_delivery_ + 1) % schedule_.size();
@@ -189,6 +189,17 @@ void LinkQueue::use_a_delivery_opportunity( void )
 			//TODO
 			FILE * fp = fopen("repeat","wt");
 			fprintf(fp,"%d\n", repeat_count++);
+			if(repeat_count == 1)
+			{
+				printf("Start Logging\n");
+			}
+
+			if(repeat_count == 2)
+			{
+				printf("Stop Logging\n");
+			}
+
+
 			fclose(fp);
  
             base_timestamp_ += schedule_.back();
