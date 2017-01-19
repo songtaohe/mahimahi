@@ -111,7 +111,7 @@ LinkQueue::LinkQueue( const string & link_name, const string & filename, const s
 void LinkQueue::record_arrival( const uint64_t arrival_time, const size_t pkt_size )
 {
     /* log it */
-    if ( log_ && repeat_count == 1 ) {
+    if ( log_   && repeat_count == 1 ) {
         *log_ << arrival_time << " + " << pkt_size << endl;
     }
 
@@ -124,7 +124,7 @@ void LinkQueue::record_arrival( const uint64_t arrival_time, const size_t pkt_si
 void LinkQueue::record_departure_opportunity( void )
 {
     /* log the delivery opportunity */
-    if ( log_ && repeat_count == 1) {
+    if ( log_  && repeat_count == 1) {
         *log_ << next_delivery_time() << " # " << PACKET_SIZE << endl;
     }
 
@@ -137,7 +137,7 @@ void LinkQueue::record_departure_opportunity( void )
 void LinkQueue::record_departure( const uint64_t departure_time, const QueuedPacket & packet )
 {
     /* log the delivery */
-    if ( log_ && repeat_count == 1) {
+    if ( log_  && repeat_count == 1) {
         *log_ << departure_time << " - " << packet.contents.size()
               << " " << departure_time - packet.arrival_time << endl;
     }
