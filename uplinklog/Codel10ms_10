@@ -1,0 +1,5 @@
+# mahimahi mm-link (Uplink) [traces/Verizon-LTE-short.up] > uplinklog/Codel10ms_10
+# command line: 'mm-link' 'traces/Verizon-LTE-short.up' 'trace14000' '--uplink-queue=codel' '--downlink-queue=infinite' '--uplink-queue-args=packets=200, target=5, interval=100' '--uplink-log=uplinklog/Codel10ms_10' '--meter-uplink' './iperf.sh' '10'
+# queue: codel [packets=200]
+# base timestamp: 133
+# mahimahi config: [delay 10 ms] 
