@@ -35,6 +35,7 @@ uint32_t  _current_qdelay_perpacket = 0;
 uint64_t dq_counter = 0;
 uint64_t eq_counter = 0;
 uint64_t dq_bytes = 0;
+uint64_t qdelay_total = 0;
 
 int state_rl_enable = 0;
 
@@ -101,7 +102,7 @@ void* UpdateDropRate_thread(void* context)
 			if(buffer[0] == 'R')
 			{
 				//sprintf(buffer, "%lu 0 0 0  0 %lu %lu %u %f 0 0\n", eq_counter, dq_bytes, dq_counter, _current_qdelay, *_drop_prob );
-				sprintf(buffer, "%lu 0 0 0  0 %lu %lu %u %f 0 0\n", eq_counter, dq_bytes, dq_counter, _current_qdelay_perpacket, *_drop_prob );
+				sprintf(buffer, "%lu 0 0 0  0 %lu %lu %u %f 0 0\n", eq_counter, dq_bytes, dq_counter, qdelay_total, *_drop_prob );
 				int ret = write(clientfd,buffer,strlen(buffer));
 				if(ret <= 0)
 				{
@@ -237,7 +238,7 @@ QueuedPacket PIEPacketQueue::dequeue( void )
 
   dq_counter ++;
   dq_bytes += ret.contents.size();
-
+  qdelay_total += _current_qdelay_perpacket;
   if ( size_bytes() >= dq_threshold_ && dq_count_ == DQ_COUNT_INVALID ) {
     dq_tstamp_ = now;
     dq_count_ = 0;
