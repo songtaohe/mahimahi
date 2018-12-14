@@ -102,7 +102,7 @@ void* UpdateDropRate_thread(void* context)
 			if(buffer[0] == 'R')
 			{
 				//sprintf(buffer, "%lu 0 0 0  0 %lu %lu %u %f 0 0\n", eq_counter, dq_bytes, dq_counter, _current_qdelay, *_drop_prob );
-				sprintf(buffer, "%lu 0 0 0  0 %lu %lu %u %f 0 0\n", eq_counter, dq_bytes, dq_counter, qdelay_total, *_drop_prob );
+				sprintf(buffer, "%lu 0 0 0  0 %lu %lu %lu %f 0 0\n", eq_counter, dq_bytes, dq_counter, qdelay_total, *_drop_prob );
 				int ret = write(clientfd,buffer,strlen(buffer));
 				if(ret <= 0)
 				{
