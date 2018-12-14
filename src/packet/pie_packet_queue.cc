@@ -41,8 +41,8 @@ int state_rl_enable = 0;
 
 
 
-//Update Drop Rate 
-void* UpdateDropRate_thread(void* context)
+//Update Drop Rate through socket 
+void* UpdateDropRateSocket_thread(void* context)
 {
 	int socketfd = 0;
 	int clientfd = 0;
@@ -117,6 +117,55 @@ void* UpdateDropRate_thread(void* context)
 		}
 
 	}
+return context;
+}
+
+
+// usign named pipe
+void* UpdateDropRate_thread(void* context)
+{
+  
+  char buffer[1024];
+  int ret;
+  
+  while(true)
+  {
+    printf("waiting mahimahi_pipe\n");
+    int fd1 = open("mahimahi_pipe1",O_RDONLY);
+    ret = read(fd1, buffer, 128);
+    close(fd1);
+
+    //if (ret <=0) {
+    //  continue;
+    //}
+    printf("%d Read %s\n",ret,  buffer);
+  
+    if(buffer[0] == 'W')
+    {
+      int a = 0;
+      int b = 0;
+      int c = 0;
+      sscanf(buffer, "W %d %d %d %lf", &a, &b, &c, &rl_drop_prob);
+      
+      state_rl_enable = b;
+    }
+    
+    if(buffer[0] == 'R')
+    {
+      //sprintf(buffer, "%lu 0 0 0  0 %lu %lu %u %f 0 0\n", eq_counter, dq_bytes, dq_counter, _current_qdelay, *_drop_prob );
+      sprintf(buffer, "%lu 0 0 0  0 %lu %lu %lu %f 0 0\n", eq_counter, dq_bytes, dq_counter, qdelay_total, *_drop_prob );
+      
+      fd1 = open("mahimahi_pipe2",O_WRONLY);
+      ret = write(fd1, buffer, strlen(buffer)+1);
+      close(fd1);
+
+    }
+
+    
+
+    
+
+  }
 return context;
 }
 
